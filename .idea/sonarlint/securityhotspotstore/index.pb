@@ -9,3 +9,5 @@ S
 #contracts/performance-tracking.clar,c/a/cae0809485c53153a7ba48fe229e6530c569fbc1
 R
 "tests/performance-tracking.test.ts,8/7/87317d0164b4c9e7f98c6957a44972b109466e0b
+T
+$contracts/property-verification.clar,9/2/92aedc8494904be11f2c1570671ab7c7affd1770

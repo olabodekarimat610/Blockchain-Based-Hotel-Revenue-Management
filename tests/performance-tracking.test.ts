@@ -1,174 +1,134 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
+// Mock implementation for testing Clarity contracts
+// In a real environment, you would use actual blockchain testing tools
+
 // Mock state
-let revenueData = new Map();
-let competitorSets = new Map();
-let competitorSetProperties = new Map();
-let competitorAggregateData = new Map();
-let admin = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+let properties = new Map();
+let admin = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'; // Example principal
 let currentTxSender = admin;
+let blockHeight = 0;
 
 // Mock contract functions
-const recordRevenueData = (propertyId, date, roomRevenue, otherRevenue, occupancyPercentage, adr) => {
-  if (occupancyPercentage > 100) {
-    return { error: 1 }; // Invalid occupancy percentage
+const registerProperty = (propertyId, name, location) => {
+  if (properties.has(propertyId)) {
+    return { error: 1 };
   }
   
-  // Calculate RevPAR
-  const revpar = (adr * occupancyPercentage) / 100;
-  
-  const key = `${propertyId}-${date}`;
-  revenueData.set(key, {
-    roomRevenue,
-    otherRevenue,
-    occupancyPercentage,
-    adr,
-    revpar
-  });
-  
-  return { success: true };
-};
-
-const createCompetitorSet = (setId, name) => {
-  if (competitorSets.has(setId)) {
-    return { error: 2 }; // Competitor set already exists
-  }
-  
-  competitorSets.set(setId, {
+  properties.set(propertyId, {
+    owner: currentTxSender,
     name,
-    owner: currentTxSender
+    location,
+    status: 0, // pending
+    verificationDate: 0
   });
   
   return { success: true };
 };
 
-const addPropertyToCompetitorSet = (setId, propertyId) => {
-  if (!competitorSets.has(setId)) {
-    return { error: 3 }; // Competitor set not found
-  }
-  
-  const set = competitorSets.get(setId);
-  if (set.owner !== currentTxSender) {
-    return { error: 4 }; // Not the owner
-  }
-  
-  const key = `${setId}-${propertyId}`;
-  competitorSetProperties.set(key, {
-    isMember: true
-  });
-  
-  return { success: true };
-};
-
-const updateCompetitorAggregateData = (setId, date, avgOccupancy, avgAdr, avgRevpar, propertyCount) => {
-  if (!competitorSets.has(setId)) {
-    return { error: 3 }; // Competitor set not found
-  }
-  
+const verifyProperty = (propertyId) => {
   if (currentTxSender !== admin) {
-    return { error: 5 }; // Not authorized
+    return { error: 2 }; // Not authorized
   }
   
-  const key = `${setId}-${date}`;
-  competitorAggregateData.set(key, {
-    avgOccupancy,
-    avgAdr,
-    avgRevpar,
-    propertyCount
+  if (!properties.has(propertyId)) {
+    return { error: 3 }; // Property not found
+  }
+  
+  const property = properties.get(propertyId);
+  properties.set(propertyId, {
+    ...property,
+    status: 1, // verified
+    verificationDate: blockHeight
   });
   
   return { success: true };
 };
 
-const comparePerformance = (propertyId, setId, date) => {
-  const propertyKey = `${propertyId}-${date}`;
-  const competitorKey = `${setId}-${date}`;
-  
-  if (!revenueData.has(propertyKey)) {
-    return { error: 6 }; // Property data not found
+const rejectProperty = (propertyId) => {
+  if (currentTxSender !== admin) {
+    return { error: 2 }; // Not authorized
   }
   
-  if (!competitorAggregateData.has(competitorKey)) {
-    return { error: 7 }; // Competitor data not found
+  if (!properties.has(propertyId)) {
+    return { error: 3 }; // Property not found
   }
   
-  const propertyData = revenueData.get(propertyKey);
-  const competitorData = competitorAggregateData.get(competitorKey);
+  const property = properties.get(propertyId);
+  properties.set(propertyId, {
+    ...property,
+    status: 2, // rejected
+    verificationDate: blockHeight
+  });
   
-  // Calculate indices
-  const occupancyIndex = competitorData.avgOccupancy > 0
-      ? (propertyData.occupancyPercentage * 100) / competitorData.avgOccupancy
-      : 0;
-  
-  const adrIndex = competitorData.avgAdr > 0
-      ? (propertyData.adr * 100) / competitorData.avgAdr
-      : 0;
-  
-  const revparIndex = competitorData.avgRevpar > 0
-      ? (propertyData.revpar * 100) / competitorData.avgRevpar
-      : 0;
-  
-  return {
-    success: {
-      occupancyIndex,
-      adrIndex,
-      revparIndex
-    }
-  };
+  return { success: true };
+};
+
+const getProperty = (propertyId) => {
+  return properties.get(propertyId) || null;
 };
 
 // Tests
-describe('Performance Tracking Contract', () => {
+describe('Property Verification Contract', () => {
   beforeEach(() => {
     // Reset state before each test
-    revenueData.clear();
-    competitorSets.clear();
-    competitorSetProperties.clear();
-    competitorAggregateData.clear();
+    properties.clear();
+    admin = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
     currentTxSender = admin;
+    blockHeight = 0;
   });
   
-  it('should record revenue data', () => {
-    const result = recordRevenueData('prop1', 20230101, 5000, 1000, 80, 250);
+  it('should register a new property', () => {
+    const result = registerProperty('prop1', 'Luxury Hotel', 'New York');
     expect(result.success).toBe(true);
     
-    const key = 'prop1-20230101';
-    expect(revenueData.has(key)).toBe(true);
-    expect(revenueData.get(key).roomRevenue).toBe(5000);
-    expect(revenueData.get(key).occupancyPercentage).toBe(80);
-    expect(revenueData.get(key).adr).toBe(250);
-    expect(revenueData.get(key).revpar).toBe(200); // 250 * 80%
+    const property = getProperty('prop1');
+    expect(property).not.toBeNull();
+    expect(property.name).toBe('Luxury Hotel');
+    expect(property.location).toBe('New York');
+    expect(property.status).toBe(0); // pending
   });
   
-  it('should create a competitor set', () => {
-    const result = createCompetitorSet('luxury', 'Luxury Hotels');
-    expect(result.success).toBe(true);
-    
-    expect(competitorSets.has('luxury')).toBe(true);
-    expect(competitorSets.get('luxury').name).toBe('Luxury Hotels');
+  it('should not register a property with an existing ID', () => {
+    registerProperty('prop1', 'Luxury Hotel', 'New York');
+    const result = registerProperty('prop1', 'Another Hotel', 'Boston');
+    expect(result.error).toBe(1);
   });
   
-  it('should add a property to a competitor set', () => {
-    createCompetitorSet('luxury', 'Luxury Hotels');
+  it('should verify a property', () => {
+    registerProperty('prop1', 'Luxury Hotel', 'New York');
+    blockHeight = 100;
     
-    const result = addPropertyToCompetitorSet('luxury', 'prop1');
+    const result = verifyProperty('prop1');
     expect(result.success).toBe(true);
     
-    const key = 'luxury-prop1';
-    expect(competitorSetProperties.has(key)).toBe(true);
-    expect(competitorSetProperties.get(key).isMember).toBe(true);
+    const property = getProperty('prop1');
+    expect(property.status).toBe(1); // verified
+    expect(property.verificationDate).toBe(100);
   });
   
-  it('should update competitor aggregate data', () => {
-    createCompetitorSet('luxury', 'Luxury Hotels');
+  it('should reject a property', () => {
+    registerProperty('prop1', 'Luxury Hotel', 'New York');
+    blockHeight = 100;
     
-    const result = updateCompetitorAggregateData('luxury', 20230101, 75, 230, 172.5, 5);
+    const result = rejectProperty('prop1');
     expect(result.success).toBe(true);
     
-    const key = 'luxury-20230101';
-    expect(competitorAggregateData.has(key)).toBe(true);
-    expect(competitorAggregateData.get(key).avgOccupancy).toBe(75);
-    expect(competitorAggregateData.get(key).avgAdr).toBe(230);
-    expect(competitorAggregateData.get(key).avgRevpar).toBe(172.5);
+    const property = getProperty('prop1');
+    expect(property.status).toBe(2); // rejected
+    expect(property.verificationDate).toBe(100);
+  });
+  
+  it('should not verify a non-existent property', () => {
+    const result = verifyProperty('nonexistent');
+    expect(result.error).toBe(3); // Property not found
+  });
+  
+  it('should not allow non-admin to verify property', () => {
+    registerProperty('prop1', 'Luxury Hotel', 'New York');
+    currentTxSender = 'ST2PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'; // Different user
+    
+    const result = verifyProperty('prop1');
+    expect(result.error).toBe(2); // Not authorized
   });
 });
